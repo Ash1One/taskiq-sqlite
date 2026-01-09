@@ -139,7 +139,7 @@ class SQLiteBroker(AsyncBroker):
             )
 
         await self._connection.execute(
-            f"INSERT INTO {queue_name} (message, created_at) VALUES (?, ?)",
+            f"INSERT INTO {queue_name} (message, created_at) VALUES (?, ?)",  # noqa: S608
             (message.message, created_at),
         )
         await self._connection.commit()
@@ -166,7 +166,7 @@ class SQLiteBroker(AsyncBroker):
                     WHERE status = 'pending'
                     ORDER BY id ASC
                     LIMIT 1
-                    """,
+                    """,  # noqa: S608
                 ) as cursor:
                     row = await cursor.fetchone()
 
@@ -175,21 +175,21 @@ class SQLiteBroker(AsyncBroker):
 
                     # Mark as processing
                     await self._connection.execute(
-                        f"UPDATE {self.queue_name} SET status = 'processing' "
+                        f"UPDATE {self.queue_name} SET status = 'processing' "  # noqa: S608
                         "WHERE id = ?",
                         (message_id,),
                     )
                     await self._connection.commit()
 
-                    async def ack() -> None:
+                    async def ack(msg_id: int = message_id) -> None:
                         """Acknowledge message processing."""
                         if not self._connection:
                             return
                         await self._connection.execute(
-                            f"UPDATE {self.queue_name} "
+                            f"UPDATE {self.queue_name} "  # noqa: S608
                             "SET status = 'completed', processed_at = ? "
                             "WHERE id = ?",
-                            (time.time(), message_id),
+                            (time.time(), msg_id),
                         )
                         await self._connection.commit()
 
