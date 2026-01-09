@@ -10,10 +10,12 @@ To use this project you must have installed core taskiq library:
 pip install taskiq
 ```
 
-This project can be installed using pip:
+This project can be installed using git:
 
 ```bash
-pip install taskiq-sqlite
+git clone https://github.com/Ash1One/taskiq-sqlite.git
+cd taskiq-sqlite
+pip install .
 ```
 
 ## Usage
