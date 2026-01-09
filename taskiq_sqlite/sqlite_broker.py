@@ -1,6 +1,7 @@
 """SQLite broker implementation for taskiq."""
 
 import asyncio
+import re
 import time
 from collections.abc import AsyncGenerator, Callable
 from logging import getLogger
@@ -16,6 +17,24 @@ from taskiq.message import BrokerMessage
 _T = TypeVar("_T")
 
 logger = getLogger("taskiq.sqlite_broker")
+
+# Pattern for validating queue names to prevent SQL injection
+QUEUE_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_]+$")
+
+
+def _validate_queue_name(queue_name: str) -> None:
+    """
+    Validate queue name to prevent SQL injection.
+
+    :param queue_name: name to validate.
+    :raises ValueError: if queue name is invalid.
+    """
+    if not QUEUE_NAME_PATTERN.match(queue_name):
+        msg = (
+            f"Invalid queue name: {queue_name!r}. "
+            "Queue names must contain only alphanumeric characters and underscores."
+        )
+        raise ValueError(msg)
 
 
 class SQLiteBroker(AsyncBroker):
@@ -39,11 +58,14 @@ class SQLiteBroker(AsyncBroker):
         :param queue_name: name for the queue table in SQLite.
         :param poll_interval: interval in seconds for polling new messages.
         :param kwargs: additional arguments.
+        :raises ValueError: if queue name contains invalid characters.
         """
         super().__init__(
             result_backend=result_backend,
             task_id_generator=task_id_generator,
         )
+        # Validate queue name to prevent SQL injection
+        _validate_queue_name(queue_name)
         self.db_path = Path(db_path)
         self.queue_name = queue_name
         self.poll_interval = poll_interval
@@ -86,12 +108,16 @@ class SQLiteBroker(AsyncBroker):
         Send a message to the SQLite queue.
 
         :param message: message to send.
+        :raises ValueError: if queue name contains invalid characters.
         """
         if not self._connection:
             msg = "Database connection is not initialized"
             raise RuntimeError(msg)
 
         queue_name = message.labels.get("queue_name") or self.queue_name
+        # Validate queue name to prevent SQL injection
+        _validate_queue_name(queue_name)
+
         created_at = time.time()
 
         # Create table for dynamic queue if needed

@@ -133,6 +133,19 @@ class SQLiteAsyncResultBackend(AsyncResultBackend[_ReturnType]):
         )
         await self._connection.commit()
 
+    async def _delete_result_if_needed(self, task_id: str) -> None:
+        """
+        Delete result from database if keep_results is False.
+
+        :param task_id: task's id.
+        """
+        if not self.keep_results and self._connection:
+            await self._connection.execute(
+                f"DELETE FROM {self.table_name} WHERE task_id = ?",
+                (task_id,),
+            )
+            await self._connection.commit()
+
     async def get_result(
         self,
         task_id: str,
@@ -169,22 +182,12 @@ class SQLiteAsyncResultBackend(AsyncResultBackend[_ReturnType]):
 
         # Check if result has expired
         if expires_at is not None and current_time > expires_at:
-            if not self.keep_results:
-                await self._connection.execute(
-                    f"DELETE FROM {self.table_name} WHERE task_id = ?",
-                    (task_id,),
-                )
-                await self._connection.commit()
+            await self._delete_result_if_needed(task_id)
             msg = f"Result for task {task_id} has expired"
             raise ResultIsMissingError(msg)
 
         # Remove result if keep_results is False
-        if not self.keep_results:
-            await self._connection.execute(
-                f"DELETE FROM {self.table_name} WHERE task_id = ?",
-                (task_id,),
-            )
-            await self._connection.commit()
+        await self._delete_result_if_needed(task_id)
 
         # Deserialize and return result
         result_dict = self.serializer.loadb(serialized_result)

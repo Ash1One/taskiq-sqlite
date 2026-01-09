@@ -216,3 +216,31 @@ async def test_broker_dynamic_queue(temp_db_path: Path) -> None:
         assert row[0] == 1
 
     await broker.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_broker_invalid_queue_name(temp_db_path: Path) -> None:
+    """Test that invalid queue names are rejected."""
+    broker = SQLiteBroker(db_path=temp_db_path)
+    await broker.startup()
+
+    # Try to use an invalid queue name with SQL injection attempt
+    from taskiq.message import BrokerMessage
+
+    test_message = BrokerMessage(
+        task_id="test_id",
+        task_name="test_task",
+        message=b"test_message",
+        labels={"queue_name": "queue; DROP TABLE taskiq; --"},
+    )
+
+    with pytest.raises(ValueError, match="Invalid queue name"):
+        await broker.kick(test_message)
+
+    await broker.shutdown()
+
+
+def test_broker_invalid_queue_name_in_constructor(temp_db_path: Path) -> None:
+    """Test that invalid queue names are rejected in constructor."""
+    with pytest.raises(ValueError, match="Invalid queue name"):
+        SQLiteBroker(db_path=temp_db_path, queue_name="queue; DROP TABLE --")
