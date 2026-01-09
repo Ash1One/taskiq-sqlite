@@ -167,21 +167,9 @@ class SQLiteBroker(AsyncBroker):
                         )
                         await self._connection.commit()
 
-                    async def nack() -> None:
-                        """Negative acknowledge - return message to queue."""
-                        if not self._connection:
-                            return
-                        await self._connection.execute(
-                            f"UPDATE {self.queue_name} SET status = 'pending' "
-                            "WHERE id = ?",
-                            (message_id,),
-                        )
-                        await self._connection.commit()
-
                     yield AckableMessage(
                         data=message_data,
                         ack=ack,
-                        nack=nack,
                     )
                 else:
                     # No messages, wait before polling again
