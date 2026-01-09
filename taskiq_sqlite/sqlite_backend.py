@@ -128,7 +128,7 @@ class SQLiteAsyncResultBackend(AsyncResultBackend[_ReturnType]):
             INSERT OR REPLACE INTO {self.table_name}
             (task_id, result, created_at, expires_at)
             VALUES (?, ?, ?, ?)
-            """,
+            """,  # noqa: S608
             (task_id, serialized_result, created_at, expires_at),
         )
         await self._connection.commit()
@@ -141,7 +141,7 @@ class SQLiteAsyncResultBackend(AsyncResultBackend[_ReturnType]):
         """
         if not self.keep_results and self._connection:
             await self._connection.execute(
-                f"DELETE FROM {self.table_name} WHERE task_id = ?",
+                f"DELETE FROM {self.table_name} WHERE task_id = ?", # noqa: S608
                 (task_id,),
             )
             await self._connection.commit()
@@ -149,7 +149,7 @@ class SQLiteAsyncResultBackend(AsyncResultBackend[_ReturnType]):
     async def get_result(
         self,
         task_id: str,
-        with_logs: bool = False,  # noqa: ARG002
+        with_logs: bool = False,
     ) -> TaskiqResult[_ReturnType]:
         """
         Retrieve result from the database.
@@ -169,7 +169,7 @@ class SQLiteAsyncResultBackend(AsyncResultBackend[_ReturnType]):
             f"""
             SELECT result, expires_at FROM {self.table_name}
             WHERE task_id = ?
-            """,
+            """,  # noqa: S608
             (task_id,),
         ) as cursor:
             row = await cursor.fetchone()
@@ -210,7 +210,7 @@ class SQLiteAsyncResultBackend(AsyncResultBackend[_ReturnType]):
             f"""
             SELECT expires_at FROM {self.table_name}
             WHERE task_id = ?
-            """,
+            """,  # noqa: S608
             (task_id,),
         ) as cursor:
             row = await cursor.fetchone()
@@ -221,7 +221,4 @@ class SQLiteAsyncResultBackend(AsyncResultBackend[_ReturnType]):
         expires_at = row[0]
 
         # Check if result has expired
-        if expires_at is not None and current_time > expires_at:
-            return False
-
-        return True
+        return not (expires_at is not None and current_time > expires_at)
