@@ -6,8 +6,8 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{ name = "Taskiq team", email = "taskiq@no-reply.com" }]
-maintainers = [{ name = "Taskiq team", email = "taskiq@no-reply.com" }]
+authors = [{ name = "huangh hao", email = "huanghao_2013@qq.com" }]
+maintainers = [{ name = "huangh hao", email = "huanghao_2013@qq.com" }]
 keywords = [
   "async",
   "distributed",
