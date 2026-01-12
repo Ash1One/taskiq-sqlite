@@ -90,6 +90,23 @@ SQLiteBroker parameters:
 - `result_backend` - custom result backend
 - `queue_name` - name for the queue table (default: "taskiq")
 - `poll_interval` - interval in seconds for polling new messages (default: 0.1)
+- `cleanup_completed_ttl` - delete completed messages older than this many
+  seconds (default: None)
+- `cleanup_completed_max_records` - keep only the most recent N completed
+  messages (default: None)
+- `cleanup_interval` - interval in seconds for periodic cleanup (default: None)
+
+#### Example with cleanup
+
+```python
+from taskiq_sqlite import SQLiteBroker
+
+broker = SQLiteBroker(
+    db_path="taskiq.db",
+    cleanup_completed_ttl=3600,
+    cleanup_interval=60,
+)
+```
 
 ### SQLiteResultBackend
 

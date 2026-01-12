@@ -1,6 +1,7 @@
 """Tests for SQLiteBroker."""
 
 import asyncio
+import time
 from pathlib import Path
 
 import pytest
@@ -244,3 +245,118 @@ def test_broker_invalid_queue_name_in_constructor(temp_db_path: Path) -> None:
     """Test that invalid queue names are rejected in constructor."""
     with pytest.raises(ValueError, match="Invalid queue name"):
         SQLiteBroker(db_path=temp_db_path, queue_name="queue; DROP TABLE --")
+
+
+@pytest.mark.asyncio
+async def test_broker_cleanup_completed_ttl(temp_db_path: Path) -> None:
+    """Test cleanup by TTL removes old completed messages."""
+    broker = SQLiteBroker(
+        db_path=temp_db_path,
+        poll_interval=0.01,
+        cleanup_completed_ttl=10,
+    )
+    await broker.startup()
+
+    from taskiq.message import BrokerMessage
+
+    for i in range(2):
+        test_message = BrokerMessage(
+            task_id=f"test_id_{i}",
+            task_name="test_task",
+            message=f"test_message_{i}".encode(),
+            labels={},
+        )
+        await broker.kick(test_message)
+
+    processed = 0
+    async for message in broker.listen():
+        if hasattr(message, "ack"):
+            await message.ack()
+        processed += 1
+        if processed >= 2:
+            break
+
+    async with broker._connection.execute(  # type: ignore[union-attr]
+        f"SELECT id FROM {broker.queue_name} ORDER BY id",
+    ) as cursor:
+        rows = await cursor.fetchall()
+    old_id = rows[0][0]
+    new_id = rows[1][0]
+    now = time.time()
+    await broker._connection.execute(  # type: ignore[union-attr]
+        f"UPDATE {broker.queue_name} SET processed_at = ? WHERE id = ?",
+        (now - 20, old_id),
+    )
+    await broker._connection.execute(  # type: ignore[union-attr]
+        f"UPDATE {broker.queue_name} SET processed_at = ? WHERE id = ?",
+        (now, new_id),
+    )
+    await broker._connection.commit()  # type: ignore[union-attr]
+
+    deleted = await broker.cleanup_completed()
+    assert deleted == 1
+
+    async with broker._connection.execute(  # type: ignore[union-attr]
+        f"SELECT COUNT(*) FROM {broker.queue_name} WHERE status = 'completed'",
+    ) as cursor:
+        row = await cursor.fetchone()
+        assert row is not None
+        assert row[0] == 1
+
+    await broker.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_broker_cleanup_completed_max_records(temp_db_path: Path) -> None:
+    """Test cleanup keeps only the most recent completed messages."""
+    broker = SQLiteBroker(
+        db_path=temp_db_path,
+        poll_interval=0.01,
+        cleanup_completed_max_records=1,
+    )
+    await broker.startup()
+
+    from taskiq.message import BrokerMessage
+
+    for i in range(3):
+        test_message = BrokerMessage(
+            task_id=f"test_id_{i}",
+            task_name="test_task",
+            message=f"test_message_{i}".encode(),
+            labels={},
+        )
+        await broker.kick(test_message)
+
+    processed = 0
+    async for message in broker.listen():
+        if hasattr(message, "ack"):
+            await message.ack()
+        processed += 1
+        if processed >= 3:
+            break
+
+    async with broker._connection.execute(  # type: ignore[union-attr]
+        f"SELECT id FROM {broker.queue_name} ORDER BY id",
+    ) as cursor:
+        rows = await cursor.fetchall()
+
+    processed_times = [100.0, 200.0, 300.0]
+    for row, processed_at in zip(rows, processed_times, strict=True):
+        await broker._connection.execute(  # type: ignore[union-attr]
+            f"UPDATE {broker.queue_name} SET processed_at = ? WHERE id = ?",
+            (processed_at, row[0]),
+        )
+    await broker._connection.commit()  # type: ignore[union-attr]
+
+    deleted = await broker.cleanup_completed()
+    assert deleted == 2
+
+    async with broker._connection.execute(  # type: ignore[union-attr]
+        f"SELECT id, processed_at FROM {broker.queue_name} "
+        "WHERE status = 'completed'",
+    ) as cursor:
+        rows = await cursor.fetchall()
+    assert len(rows) == 1
+    assert rows[0]["processed_at"] == 300.0
+
+    await broker.shutdown()
