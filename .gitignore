@@ -211,3 +211,6 @@ example.db*
 example_results.db*
 taskiq.db*
 taskiq_results.db*
+
+# vscode
+.vscode/

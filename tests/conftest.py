@@ -1,17 +1,18 @@
 """Configuration for pytest."""
 
 import tempfile
+from collections.abc import Generator
 from pathlib import Path
 
 import pytest
 
 
 @pytest.fixture
-def temp_db_path() -> Path:
+def temp_db_path() -> Generator[Path, None, None]:
     """Create a temporary database path."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         db_path = Path(tmp.name)
-    yield db_path
+        yield db_path
     # Cleanup
     if db_path.exists():
         db_path.unlink()

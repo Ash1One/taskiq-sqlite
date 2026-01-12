@@ -1,11 +1,10 @@
 """Example usage of taskiq-sqlite."""
-
 import asyncio
 
-from taskiq_sqlite import SQLiteAsyncResultBackend, SQLiteBroker
+from taskiq_sqlite import SQLiteBroker, SQLiteResultBackend
 
 # Create result backend with 1 hour expiration
-result_backend = SQLiteAsyncResultBackend(
+result_backend = SQLiteResultBackend(
     db_path="example_results.db",
     keep_results=True,
     result_ex_time=3600,

@@ -20,7 +20,7 @@ from taskiq_sqlite.exceptions import (
 _ReturnType = TypeVar("_ReturnType")
 
 
-class SQLiteAsyncResultBackend(AsyncResultBackend[_ReturnType]):
+class SQLiteResultBackend(AsyncResultBackend[_ReturnType]):
     """Async result backend based on SQLite."""
 
     def __init__(
@@ -31,6 +31,7 @@ class SQLiteAsyncResultBackend(AsyncResultBackend[_ReturnType]):
         result_px_time: int | None = None,
         serializer: TaskiqSerializer | None = None,
         table_name: str = "taskiq_results",
+        busy_timeout_ms: int = 5000,
         **kwargs: Any,
     ) -> None:
         """
@@ -42,6 +43,7 @@ class SQLiteAsyncResultBackend(AsyncResultBackend[_ReturnType]):
         :param result_px_time: expire time in milliseconds for result.
         :param serializer: custom serializer for results.
         :param table_name: name for the results table in SQLite.
+        :param busy_timeout_ms: busy timeout for SQLite connection in milliseconds.
         :param kwargs: additional arguments.
 
         :raises DuplicateExpireTimeSelectedError: if result_ex_time
@@ -55,6 +57,7 @@ class SQLiteAsyncResultBackend(AsyncResultBackend[_ReturnType]):
         self.result_ex_time = result_ex_time
         self.result_px_time = result_px_time
         self.table_name = table_name
+        self.busy_timeout_ms = busy_timeout_ms
         self._connection: aiosqlite.Connection | None = None
 
         unavailable_conditions = any(
@@ -72,23 +75,8 @@ class SQLiteAsyncResultBackend(AsyncResultBackend[_ReturnType]):
     async def startup(self) -> None:
         """Initialize the database connection and create tables."""
         await super().startup()
-        self._connection = await aiosqlite.connect(str(self.db_path))
-        await self._connection.execute("PRAGMA journal_mode=WAL")
-        await self._connection.execute(
-            f"""
-            CREATE TABLE IF NOT EXISTS {self.table_name} (
-                task_id TEXT PRIMARY KEY,
-                result BLOB NOT NULL,
-                created_at REAL NOT NULL,
-                expires_at REAL
-            )
-            """,
-        )
-        await self._connection.execute(
-            f"CREATE INDEX IF NOT EXISTS idx_{self.table_name}_expires "
-            f"ON {self.table_name}(expires_at)",
-        )
-        await self._connection.commit()
+        await self._connect()
+        await self._ensure_schema()
 
     async def shutdown(self) -> None:
         """Close the database connection."""
@@ -107,7 +95,9 @@ class SQLiteAsyncResultBackend(AsyncResultBackend[_ReturnType]):
 
         :param task_id: task's id.
         :param result: result to store.
+        :raises RuntimeError: if database connection is not initialized.
         """
+        await self._connect()
         if not self._connection:
             msg = "Database connection is not initialized"
             raise RuntimeError(msg)
@@ -157,8 +147,10 @@ class SQLiteAsyncResultBackend(AsyncResultBackend[_ReturnType]):
         :param task_id: task's id.
         :param with_logs: whether to return logs (not implemented for SQLite).
         :return: task's result.
+        :raises RuntimeError: if database connection is not initialized.
         :raises ResultIsMissingError: if result is not found or expired.
         """
+        await self._connect()
         if not self._connection:
             msg = "Database connection is not initialized"
             raise RuntimeError(msg)
@@ -178,7 +170,8 @@ class SQLiteAsyncResultBackend(AsyncResultBackend[_ReturnType]):
             msg = f"Result for task {task_id} not found"
             raise ResultIsMissingError(msg)
 
-        serialized_result, expires_at = row
+        serialized_result = row["result"]
+        expires_at = row["expires_at"]
 
         # Check if result has expired
         if expires_at is not None and current_time > expires_at:
@@ -189,9 +182,8 @@ class SQLiteAsyncResultBackend(AsyncResultBackend[_ReturnType]):
         # Remove result if keep_results is False
         await self._delete_result_if_needed(task_id)
 
-        # Deserialize and return result
         result_dict = self.serializer.loadb(serialized_result)
-        return model_validate(TaskiqResult[_ReturnType], result_dict)
+        return model_validate(TaskiqResult[_ReturnType], result_dict)  # ty:ignore[invalid-argument-type, call-non-callable, invalid-return-type]
 
     async def is_result_ready(self, task_id: str) -> bool:
         """
@@ -199,7 +191,9 @@ class SQLiteAsyncResultBackend(AsyncResultBackend[_ReturnType]):
 
         :param task_id: task's id.
         :return: True if result is ready, False otherwise.
+        :raises RuntimeError: if database connection is not initialized.
         """
+        await self._connect()
         if not self._connection:
             msg = "Database connection is not initialized"
             raise RuntimeError(msg)
@@ -222,3 +216,32 @@ class SQLiteAsyncResultBackend(AsyncResultBackend[_ReturnType]):
 
         # Check if result has expired
         return not (expires_at is not None and current_time > expires_at)
+
+    async def _connect(self) -> None:
+        """Establish the database connection."""
+        if self._connection is not None:
+            return
+        self._connection = await aiosqlite.connect(str(self.db_path))
+        self._connection.row_factory = aiosqlite.Row
+        await self._connection.execute(f"PRAGMA busy_timeout = {self.busy_timeout_ms}")
+        await self._connection.execute("PRAGMA journal_mode = WAL")
+        await self._connection.execute("PRAGMA synchronous = NORMAL")
+
+    async def _ensure_schema(self) -> None:
+        if self._connection is None:
+            return
+        await self._connection.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS {self.table_name} (
+                task_id TEXT PRIMARY KEY,
+                result BLOB NOT NULL,
+                created_at REAL NOT NULL,
+                expires_at REAL
+            )
+            """,
+        )
+        await self._connection.execute(
+            f"CREATE INDEX IF NOT EXISTS idx_{self.table_name}_expires "
+            f"ON {self.table_name}(expires_at)",
+        )
+        await self._connection.commit()

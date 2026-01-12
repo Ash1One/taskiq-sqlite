@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from taskiq import TaskiqResult
 
-from taskiq_sqlite import SQLiteAsyncResultBackend
+from taskiq_sqlite import SQLiteResultBackend
 from taskiq_sqlite.exceptions import (
     DuplicateExpireTimeSelectedError,
     ExpireTimeMustBeMoreThanZeroError,
@@ -17,7 +17,7 @@ from taskiq_sqlite.exceptions import (
 @pytest.mark.asyncio
 async def test_backend_startup_shutdown(temp_db_path: Path) -> None:
     """Test backend startup and shutdown."""
-    backend = SQLiteAsyncResultBackend(db_path=temp_db_path)
+    backend = SQLiteResultBackend(db_path=temp_db_path)
     await backend.startup()
     assert backend._connection is not None
     await backend.shutdown()
@@ -27,7 +27,7 @@ async def test_backend_startup_shutdown(temp_db_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_backend_set_and_get_result(temp_db_path: Path) -> None:
     """Test storing and retrieving a result."""
-    backend = SQLiteAsyncResultBackend(db_path=temp_db_path)
+    backend = SQLiteResultBackend(db_path=temp_db_path)
     await backend.startup()
 
     task_id = "test_task_123"
@@ -52,7 +52,7 @@ async def test_backend_set_and_get_result(temp_db_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_backend_is_result_ready(temp_db_path: Path) -> None:
     """Test checking if result is ready."""
-    backend = SQLiteAsyncResultBackend(db_path=temp_db_path)
+    backend = SQLiteResultBackend(db_path=temp_db_path)
     await backend.startup()
 
     task_id = "test_task_456"
@@ -78,7 +78,7 @@ async def test_backend_is_result_ready(temp_db_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_backend_result_expiration(temp_db_path: Path) -> None:
     """Test result expiration."""
-    backend = SQLiteAsyncResultBackend(
+    backend = SQLiteResultBackend(
         db_path=temp_db_path,
         result_ex_time=1,  # Expire after 1 second
     )
@@ -113,7 +113,7 @@ async def test_backend_result_expiration(temp_db_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_backend_keep_results_false(temp_db_path: Path) -> None:
     """Test that results are deleted when keep_results is False."""
-    backend = SQLiteAsyncResultBackend(
+    backend = SQLiteResultBackend(
         db_path=temp_db_path,
         keep_results=False,
     )
@@ -142,7 +142,7 @@ async def test_backend_keep_results_false(temp_db_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_backend_keep_results_true(temp_db_path: Path) -> None:
     """Test that results are kept when keep_results is True."""
-    backend = SQLiteAsyncResultBackend(
+    backend = SQLiteResultBackend(
         db_path=temp_db_path,
         keep_results=True,
     )
@@ -170,7 +170,7 @@ async def test_backend_keep_results_true(temp_db_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_backend_result_missing(temp_db_path: Path) -> None:
     """Test retrieving a non-existent result."""
-    backend = SQLiteAsyncResultBackend(db_path=temp_db_path)
+    backend = SQLiteResultBackend(db_path=temp_db_path)
     await backend.startup()
 
     with pytest.raises(ResultIsMissingError):
@@ -182,31 +182,31 @@ async def test_backend_result_missing(temp_db_path: Path) -> None:
 def test_backend_invalid_expire_time_zero() -> None:
     """Test that zero expire time raises an error."""
     with pytest.raises(ExpireTimeMustBeMoreThanZeroError):
-        SQLiteAsyncResultBackend(result_ex_time=0)
+        SQLiteResultBackend(result_ex_time=0)
 
     with pytest.raises(ExpireTimeMustBeMoreThanZeroError):
-        SQLiteAsyncResultBackend(result_px_time=0)
+        SQLiteResultBackend(result_px_time=0)
 
 
 def test_backend_invalid_expire_time_negative() -> None:
     """Test that negative expire time raises an error."""
     with pytest.raises(ExpireTimeMustBeMoreThanZeroError):
-        SQLiteAsyncResultBackend(result_ex_time=-1)
+        SQLiteResultBackend(result_ex_time=-1)
 
     with pytest.raises(ExpireTimeMustBeMoreThanZeroError):
-        SQLiteAsyncResultBackend(result_px_time=-1)
+        SQLiteResultBackend(result_px_time=-1)
 
 
 def test_backend_duplicate_expire_time() -> None:
     """Test that setting both expire times raises an error."""
     with pytest.raises(DuplicateExpireTimeSelectedError):
-        SQLiteAsyncResultBackend(result_ex_time=10, result_px_time=10000)
+        SQLiteResultBackend(result_ex_time=10, result_px_time=10000)
 
 
 @pytest.mark.asyncio
 async def test_backend_result_px_time(temp_db_path: Path) -> None:
     """Test result expiration using milliseconds."""
-    backend = SQLiteAsyncResultBackend(
+    backend = SQLiteResultBackend(
         db_path=temp_db_path,
         result_px_time=500,  # Expire after 500ms
     )
