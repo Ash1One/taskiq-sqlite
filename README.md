@@ -27,9 +27,9 @@ Let's see the example with the SQLite broker and SQLite async result backend:
 import asyncio
 from pathlib import Path
 
-from taskiq_sqlite import SQLiteAsyncResultBackend, SQLiteBroker
+from taskiq_sqlite import SQLiteResultBackend, SQLiteBroker
 
-result_backend = SQLiteAsyncResultBackend(
+result_backend = SQLiteResultBackend(
     db_path="taskiq_results.db",
     keep_results=True,
     result_ex_time=3600,  # Results expire after 1 hour
@@ -91,7 +91,7 @@ SQLiteBroker parameters:
 - `queue_name` - name for the queue table (default: "taskiq")
 - `poll_interval` - interval in seconds for polling new messages (default: 0.1)
 
-### SQLiteAsyncResultBackend
+### SQLiteResultBackend
 
 The SQLite result backend stores task results in a SQLite database. It provides:
 
@@ -101,7 +101,7 @@ The SQLite result backend stores task results in a SQLite database. It provides:
 
 #### Configuration
 
-SQLiteAsyncResultBackend parameters:
+SQLiteResultBackend parameters:
 
 - `db_path` - path to the SQLite database file (default: "taskiq_results.db")
 - `keep_results` - flag to not remove results after reading (default: True)
@@ -115,10 +115,10 @@ SQLiteAsyncResultBackend parameters:
 ## Example with expiration
 
 ```python
-from taskiq_sqlite import SQLiteAsyncResultBackend, SQLiteBroker
+from taskiq_sqlite import SQLiteResultBackend, SQLiteBroker
 
 # Results expire after 1 hour
-result_backend = SQLiteAsyncResultBackend(
+result_backend = SQLiteResultBackend(
     db_path="taskiq_results.db",
     result_ex_time=3600,
 )
