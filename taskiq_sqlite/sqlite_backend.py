@@ -1,6 +1,9 @@
 """SQLite result backend implementation for taskiq."""
 
+import asyncio
+import contextlib
 import time
+from logging import getLogger
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -19,6 +22,8 @@ from taskiq_sqlite.exceptions import (
 
 _ReturnType = TypeVar("_ReturnType")
 
+logger = getLogger("taskiq.sqlite_backend")
+
 
 class SQLiteResultBackend(AsyncResultBackend[_ReturnType]):
     """Async result backend based on SQLite."""
@@ -32,6 +37,7 @@ class SQLiteResultBackend(AsyncResultBackend[_ReturnType]):
         serializer: TaskiqSerializer | None = None,
         table_name: str = "taskiq_results",
         busy_timeout_ms: int = 5000,
+        cleanup_expired_interval: float | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -44,6 +50,8 @@ class SQLiteResultBackend(AsyncResultBackend[_ReturnType]):
         :param serializer: custom serializer for results.
         :param table_name: name for the results table in SQLite.
         :param busy_timeout_ms: busy timeout for SQLite connection in milliseconds.
+        :param cleanup_expired_interval: interval in seconds for periodic cleanup
+            of expired results.
         :param kwargs: additional arguments.
 
         :raises DuplicateExpireTimeSelectedError: if result_ex_time
@@ -58,7 +66,10 @@ class SQLiteResultBackend(AsyncResultBackend[_ReturnType]):
         self.result_px_time = result_px_time
         self.table_name = table_name
         self.busy_timeout_ms = busy_timeout_ms
+        self.cleanup_expired_interval = cleanup_expired_interval
         self._connection: aiosqlite.Connection | None = None
+        self._cleanup_task: asyncio.Task[None] | None = None
+        self._shutdown_event = asyncio.Event()
 
         unavailable_conditions = any(
             (
@@ -68,6 +79,9 @@ class SQLiteResultBackend(AsyncResultBackend[_ReturnType]):
         )
         if unavailable_conditions:
             raise ExpireTimeMustBeMoreThanZeroError
+        if cleanup_expired_interval is not None and cleanup_expired_interval <= 0:
+            msg = "cleanup_expired_interval must be greater than zero"
+            raise ValueError(msg)
 
         if self.result_ex_time and self.result_px_time:
             raise DuplicateExpireTimeSelectedError
@@ -77,9 +91,17 @@ class SQLiteResultBackend(AsyncResultBackend[_ReturnType]):
         await super().startup()
         await self._connect()
         await self._ensure_schema()
+        if self.cleanup_expired_interval is not None:
+            self._cleanup_task = asyncio.create_task(self._cleanup_loop())
 
     async def shutdown(self) -> None:
         """Close the database connection."""
+        self._shutdown_event.set()
+        if self._cleanup_task:
+            self._cleanup_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._cleanup_task
+            self._cleanup_task = None
         if self._connection:
             await self._connection.close()
             self._connection = None
@@ -216,6 +238,36 @@ class SQLiteResultBackend(AsyncResultBackend[_ReturnType]):
 
         # Check if result has expired
         return not (expires_at is not None and current_time > expires_at)
+
+    async def cleanup_expired(self) -> int:
+        """
+        Delete expired results from the database.
+
+        :return: number of deleted rows.
+        :raises RuntimeError: if database connection is not initialized.
+        """
+        await self._connect()
+        if not self._connection:
+            msg = "Database connection is not initialized"
+            raise RuntimeError(msg)
+        now = time.time()
+        cursor = await self._connection.execute(
+            f"""
+            DELETE FROM {self.table_name}
+            WHERE expires_at IS NOT NULL AND expires_at < ?
+            """,  # noqa: S608
+            (now,),
+        )
+        await self._connection.commit()
+        return cursor.rowcount or 0
+
+    async def _cleanup_loop(self) -> None:
+        while not self._shutdown_event.is_set():
+            try:
+                await self.cleanup_expired()
+            except Exception:
+                logger.exception("Failed to cleanup expired results")
+            await asyncio.sleep(self.cleanup_expired_interval or 0)
 
     async def _connect(self) -> None:
         """Establish the database connection."""

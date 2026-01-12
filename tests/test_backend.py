@@ -1,6 +1,7 @@
 """Tests for SQLiteAsyncResultBackend."""
 
 import asyncio
+import time
 from pathlib import Path
 
 import pytest
@@ -230,5 +231,50 @@ async def test_backend_result_px_time(temp_db_path: Path) -> None:
 
     # Result should no longer be ready
     assert await backend.is_result_ready(task_id) is False
+
+    await backend.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_backend_cleanup_expired(temp_db_path: Path) -> None:
+    """Test cleanup_expired deletes expired rows."""
+    backend = SQLiteResultBackend(
+        db_path=temp_db_path,
+        result_ex_time=10,
+    )
+    await backend.startup()
+
+    task_id_expired = "expired_task"
+    task_id_active = "active_task"
+    result = TaskiqResult(
+        is_err=False,
+        log="Test log",
+        return_value="test_return",
+        execution_time=1.5,
+    )
+
+    await backend.set_result(task_id_expired, result)
+    await backend.set_result(task_id_active, result)
+
+    now = time.time()
+    await backend._connection.execute(  # type: ignore[union-attr]
+        f"UPDATE {backend.table_name} SET expires_at = ? WHERE task_id = ?",
+        (now - 20, task_id_expired),
+    )
+    await backend._connection.execute(  # type: ignore[union-attr]
+        f"UPDATE {backend.table_name} SET expires_at = ? WHERE task_id = ?",
+        (now + 20, task_id_active),
+    )
+    await backend._connection.commit()  # type: ignore[union-attr]
+
+    deleted = await backend.cleanup_expired()
+    assert deleted == 1
+
+    async with backend._connection.execute(  # type: ignore[union-attr]
+        f"SELECT COUNT(*) FROM {backend.table_name}",
+    ) as cursor:
+        row = await cursor.fetchone()
+        assert row is not None
+        assert row[0] == 1
 
     await backend.shutdown()

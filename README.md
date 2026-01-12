@@ -70,6 +70,48 @@ Then run the main code:
 python3 broker.py
 ```
 
+### More usage examples
+
+Broker cleanup example:
+
+```python
+from taskiq_sqlite import SQLiteBroker
+
+broker = SQLiteBroker(
+    db_path="taskiq.db",
+    cleanup_completed_ttl=3600,
+    cleanup_interval=60,
+)
+```
+
+Result backend expiration example:
+
+```python
+from taskiq_sqlite import SQLiteResultBackend, SQLiteBroker
+
+# Results expire after 1 hour
+result_backend = SQLiteResultBackend(
+    db_path="taskiq_results.db",
+    result_ex_time=3600,
+)
+
+broker = SQLiteBroker(
+    db_path="taskiq.db",
+).with_result_backend(result_backend)
+```
+
+Result backend cleanup example:
+
+```python
+from taskiq_sqlite import SQLiteResultBackend
+
+result_backend = SQLiteResultBackend(
+    db_path="taskiq_results.db",
+    result_ex_time=3600,
+    cleanup_expired_interval=60,
+)
+```
+
 ## Features
 
 ### SQLiteBroker
@@ -96,18 +138,6 @@ SQLiteBroker parameters:
   messages (default: None)
 - `cleanup_interval` - interval in seconds for periodic cleanup (default: None)
 
-#### Example with cleanup
-
-```python
-from taskiq_sqlite import SQLiteBroker
-
-broker = SQLiteBroker(
-    db_path="taskiq.db",
-    cleanup_completed_ttl=3600,
-    cleanup_interval=60,
-)
-```
-
 ### SQLiteResultBackend
 
 The SQLite result backend stores task results in a SQLite database. It provides:
@@ -126,24 +156,10 @@ SQLiteResultBackend parameters:
 - `result_px_time` - expire time in milliseconds (default: None)
 - `serializer` - custom serializer for results (default: PickleSerializer)
 - `table_name` - name for the results table (default: "taskiq_results")
+- `cleanup_expired_interval` - interval in seconds for periodic cleanup of
+  expired results (default: None)
 
 **Note**: Either `result_ex_time` or `result_px_time` can be set, but not both.
-
-## Example with expiration
-
-```python
-from taskiq_sqlite import SQLiteResultBackend, SQLiteBroker
-
-# Results expire after 1 hour
-result_backend = SQLiteResultBackend(
-    db_path="taskiq_results.db",
-    result_ex_time=3600,
-)
-
-broker = SQLiteBroker(
-    db_path="taskiq.db",
-).with_result_backend(result_backend)
-```
 
 ## Use Cases
 
