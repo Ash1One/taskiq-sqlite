@@ -14,7 +14,7 @@ from taskiq.compat import model_dump, model_validate
 from taskiq.result import TaskiqResult
 from taskiq.serializers import PickleSerializer
 
-from .exceptions import (
+from taskiq_sqlite.exceptions import (
     DuplicateExpireTimeSelectedError,
     ExpireTimeMustBeMoreThanZeroError,
     ResultIsMissingError,
