@@ -169,8 +169,10 @@ class SQLiteBroker(AsyncBroker):
                 )
 
             await self._connection.execute(
-                (f"INSERT INTO {queue_name} (task_id, message, created_at) "  # noqa: S608
-                 "VALUES (?, ?, ?)"),
+                (
+                    f"INSERT INTO {queue_name} (task_id, message, created_at) "  # noqa: S608
+                    "VALUES (?, ?, ?)"
+                ),
                 (message.task_id, message.message, time.time()),
             )
             await self._connection.commit()

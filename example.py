@@ -1,10 +1,11 @@
 """Example usage of taskiq-sqlite."""
+
 import asyncio
 
 from taskiq_sqlite import SQLiteBroker, SQLiteResultBackend
 
 # Create result backend with 1 hour expiration
-result_backend = SQLiteResultBackend(
+result_backend: SQLiteResultBackend[int] = SQLiteResultBackend(
     db_path="example_results.db",
     keep_results=True,
     result_ex_time=3600,
@@ -66,7 +67,7 @@ async def worker_example() -> None:
         print(f"Processing message...")
         # In real usage, taskiq worker handles this automatically
         if hasattr(message, "ack"):
-            await message.ack()
+            await message.ack() # type: ignore
         processed += 1
         if processed >= 3:  # Process 3 messages then stop
             break

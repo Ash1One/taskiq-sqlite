@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 
 import pytest
+from taskiq.message import BrokerMessage
 
 from taskiq_sqlite import SQLiteBroker
 
@@ -60,7 +61,7 @@ async def test_broker_listen_and_process(temp_db_path: Path) -> None:
         message_received = True
         # Acknowledge the message
         if hasattr(message, "ack"):
-            await message.ack()
+            await message.ack() # type: ignore
         break
 
         # Check timeout (though break above should prevent this)
@@ -78,9 +79,6 @@ async def test_broker_message_ack(temp_db_path: Path) -> None:
     broker = SQLiteBroker(db_path=temp_db_path, poll_interval=0.05)
     await broker.startup()
 
-    # Create and send a test message
-    from taskiq.message import BrokerMessage
-
     test_message = BrokerMessage(
         task_id="test_id",
         task_name="test_task",
@@ -92,12 +90,12 @@ async def test_broker_message_ack(temp_db_path: Path) -> None:
     # Listen and acknowledge
     async for message in broker.listen():
         if hasattr(message, "ack"):
-            await message.ack()
+            await message.ack() # type: ignore
         break
 
     # Check that message is marked as completed
     async with broker._connection.execute(  # type: ignore
-        f"SELECT status FROM {broker.queue_name} WHERE id = 1",
+        f"SELECT status FROM {broker.queue_name} WHERE id = 1",  # noqa: S608
     ) as cursor:
         row = await cursor.fetchone()
         assert row is not None
@@ -112,9 +110,6 @@ async def test_broker_message_processing_status(temp_db_path: Path) -> None:
     broker = SQLiteBroker(db_path=temp_db_path, poll_interval=0.05)
     await broker.startup()
 
-    # Create and send a test message
-    from taskiq.message import BrokerMessage
-
     test_message = BrokerMessage(
         task_id="test_id",
         task_name="test_task",
@@ -127,7 +122,7 @@ async def test_broker_message_processing_status(temp_db_path: Path) -> None:
     async for message in broker.listen():
         # Check that message is marked as processing in database
         async with broker._connection.execute(  # type: ignore
-            f"SELECT status FROM {broker.queue_name} WHERE id = 1",
+            f"SELECT status FROM {broker.queue_name} WHERE id = 1",  # noqa: S608
         ) as cursor:
             row = await cursor.fetchone()
             assert row is not None
@@ -135,7 +130,7 @@ async def test_broker_message_processing_status(temp_db_path: Path) -> None:
 
         # Acknowledge the message
         if hasattr(message, "ack"):
-            await message.ack()
+            await message.ack()  # type: ignore
         break
 
     # Wait a bit for the ack to complete
@@ -143,7 +138,7 @@ async def test_broker_message_processing_status(temp_db_path: Path) -> None:
 
     # Verify that the message is now completed
     async with broker._connection.execute(  # type: ignore
-        f"SELECT status FROM {broker.queue_name} WHERE id = 1",
+        f"SELECT status FROM {broker.queue_name} WHERE id = 1",  # noqa: S608
     ) as cursor:
         row = await cursor.fetchone()
         assert row is not None
@@ -157,9 +152,6 @@ async def test_broker_multiple_messages(temp_db_path: Path) -> None:
     """Test processing multiple messages."""
     broker = SQLiteBroker(db_path=temp_db_path, poll_interval=0.05)
     await broker.startup()
-
-    # Create multiple messages
-    from taskiq.message import BrokerMessage
 
     for i in range(5):
         test_message = BrokerMessage(
@@ -178,7 +170,7 @@ async def test_broker_multiple_messages(temp_db_path: Path) -> None:
     async for message in broker.listen():
         messages_processed += 1
         if hasattr(message, "ack"):
-            await message.ack()
+            await message.ack() # type: ignore
         if messages_processed >= 5:
             break
 
@@ -196,9 +188,6 @@ async def test_broker_dynamic_queue(temp_db_path: Path) -> None:
     """Test using dynamic queue names."""
     broker = SQLiteBroker(db_path=temp_db_path, poll_interval=0.05)
     await broker.startup()
-
-    # Create and send a message to a custom queue
-    from taskiq.message import BrokerMessage
 
     test_message = BrokerMessage(
         task_id="test_id",
@@ -224,9 +213,6 @@ async def test_broker_invalid_queue_name(temp_db_path: Path) -> None:
     """Test that invalid queue names are rejected."""
     broker = SQLiteBroker(db_path=temp_db_path)
     await broker.startup()
-
-    # Try to use an invalid queue name with SQL injection attempt
-    from taskiq.message import BrokerMessage
 
     test_message = BrokerMessage(
         task_id="test_id",
@@ -257,8 +243,6 @@ async def test_broker_cleanup_completed_ttl(temp_db_path: Path) -> None:
     )
     await broker.startup()
 
-    from taskiq.message import BrokerMessage
-
     for i in range(2):
         test_message = BrokerMessage(
             task_id=f"test_id_{i}",
@@ -271,24 +255,24 @@ async def test_broker_cleanup_completed_ttl(temp_db_path: Path) -> None:
     processed = 0
     async for message in broker.listen():
         if hasattr(message, "ack"):
-            await message.ack()
+            await message.ack() # type: ignore
         processed += 1
         if processed >= 2:
             break
 
     async with broker._connection.execute(  # type: ignore[union-attr]
-        f"SELECT id FROM {broker.queue_name} ORDER BY id",
+        f"SELECT id FROM {broker.queue_name} ORDER BY id",  # noqa: S608
     ) as cursor:
         rows = await cursor.fetchall()
-    old_id = rows[0][0]
-    new_id = rows[1][0]
+    old_id = rows[0][0] # type: ignore
+    new_id = rows[1][0] # type: ignore
     now = time.time()
     await broker._connection.execute(  # type: ignore[union-attr]
-        f"UPDATE {broker.queue_name} SET processed_at = ? WHERE id = ?",
+        f"UPDATE {broker.queue_name} SET processed_at = ? WHERE id = ?",  # noqa: S608
         (now - 20, old_id),
     )
     await broker._connection.execute(  # type: ignore[union-attr]
-        f"UPDATE {broker.queue_name} SET processed_at = ? WHERE id = ?",
+        f"UPDATE {broker.queue_name} SET processed_at = ? WHERE id = ?",  # noqa: S608
         (now, new_id),
     )
     await broker._connection.commit()  # type: ignore[union-attr]
@@ -297,7 +281,7 @@ async def test_broker_cleanup_completed_ttl(temp_db_path: Path) -> None:
     assert deleted == 1
 
     async with broker._connection.execute(  # type: ignore[union-attr]
-        f"SELECT COUNT(*) FROM {broker.queue_name} WHERE status = 'completed'",
+        f"SELECT COUNT(*) FROM {broker.queue_name} WHERE status = 'completed'",  # noqa: S608
     ) as cursor:
         row = await cursor.fetchone()
         assert row is not None
@@ -316,8 +300,6 @@ async def test_broker_cleanup_completed_max_records(temp_db_path: Path) -> None:
     )
     await broker.startup()
 
-    from taskiq.message import BrokerMessage
-
     for i in range(3):
         test_message = BrokerMessage(
             task_id=f"test_id_{i}",
@@ -330,20 +312,20 @@ async def test_broker_cleanup_completed_max_records(temp_db_path: Path) -> None:
     processed = 0
     async for message in broker.listen():
         if hasattr(message, "ack"):
-            await message.ack()
+            await message.ack() # type: ignore
         processed += 1
         if processed >= 3:
             break
 
     async with broker._connection.execute(  # type: ignore[union-attr]
-        f"SELECT id FROM {broker.queue_name} ORDER BY id",
+        f"SELECT id FROM {broker.queue_name} ORDER BY id",  # noqa: S608
     ) as cursor:
         rows = await cursor.fetchall()
 
     processed_times = [100.0, 200.0, 300.0]
     for row, processed_at in zip(rows, processed_times, strict=True):
         await broker._connection.execute(  # type: ignore[union-attr]
-            f"UPDATE {broker.queue_name} SET processed_at = ? WHERE id = ?",
+            f"UPDATE {broker.queue_name} SET processed_at = ? WHERE id = ?",  # noqa: S608
             (processed_at, row[0]),
         )
     await broker._connection.commit()  # type: ignore[union-attr]
@@ -352,10 +334,10 @@ async def test_broker_cleanup_completed_max_records(temp_db_path: Path) -> None:
     assert deleted == 2
 
     async with broker._connection.execute(  # type: ignore[union-attr]
-        f"SELECT id, processed_at FROM {broker.queue_name} "
+        f"SELECT id, processed_at FROM {broker.queue_name} "  # noqa: S608
         "WHERE status = 'completed'",
     ) as cursor:
-        rows = await cursor.fetchall()
+        rows = list(await cursor.fetchall())
     assert len(rows) == 1
     assert rows[0]["processed_at"] == 300.0
 

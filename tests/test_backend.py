@@ -18,7 +18,7 @@ from taskiq_sqlite.exceptions import (
 @pytest.mark.asyncio
 async def test_backend_startup_shutdown(temp_db_path: Path) -> None:
     """Test backend startup and shutdown."""
-    backend = SQLiteResultBackend(db_path=temp_db_path)
+    backend: SQLiteResultBackend[str] = SQLiteResultBackend(db_path=temp_db_path)
     await backend.startup()
     assert backend._connection is not None
     await backend.shutdown()
@@ -28,7 +28,7 @@ async def test_backend_startup_shutdown(temp_db_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_backend_set_and_get_result(temp_db_path: Path) -> None:
     """Test storing and retrieving a result."""
-    backend = SQLiteResultBackend(db_path=temp_db_path)
+    backend: SQLiteResultBackend[str] = SQLiteResultBackend(db_path=temp_db_path)
     await backend.startup()
 
     task_id = "test_task_123"
@@ -53,7 +53,7 @@ async def test_backend_set_and_get_result(temp_db_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_backend_is_result_ready(temp_db_path: Path) -> None:
     """Test checking if result is ready."""
-    backend = SQLiteResultBackend(db_path=temp_db_path)
+    backend: SQLiteResultBackend[str] = SQLiteResultBackend(db_path=temp_db_path)
     await backend.startup()
 
     task_id = "test_task_456"
@@ -79,7 +79,7 @@ async def test_backend_is_result_ready(temp_db_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_backend_result_expiration(temp_db_path: Path) -> None:
     """Test result expiration."""
-    backend = SQLiteResultBackend(
+    backend: SQLiteResultBackend[str] = SQLiteResultBackend(
         db_path=temp_db_path,
         result_ex_time=1,  # Expire after 1 second
     )
@@ -114,7 +114,7 @@ async def test_backend_result_expiration(temp_db_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_backend_keep_results_false(temp_db_path: Path) -> None:
     """Test that results are deleted when keep_results is False."""
-    backend = SQLiteResultBackend(
+    backend: SQLiteResultBackend[str] = SQLiteResultBackend(
         db_path=temp_db_path,
         keep_results=False,
     )
@@ -143,7 +143,7 @@ async def test_backend_keep_results_false(temp_db_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_backend_keep_results_true(temp_db_path: Path) -> None:
     """Test that results are kept when keep_results is True."""
-    backend = SQLiteResultBackend(
+    backend: SQLiteResultBackend[str] = SQLiteResultBackend(
         db_path=temp_db_path,
         keep_results=True,
     )
@@ -171,7 +171,7 @@ async def test_backend_keep_results_true(temp_db_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_backend_result_missing(temp_db_path: Path) -> None:
     """Test retrieving a non-existent result."""
-    backend = SQLiteResultBackend(db_path=temp_db_path)
+    backend: SQLiteResultBackend[str] = SQLiteResultBackend(db_path=temp_db_path)
     await backend.startup()
 
     with pytest.raises(ResultIsMissingError):
@@ -207,7 +207,7 @@ def test_backend_duplicate_expire_time() -> None:
 @pytest.mark.asyncio
 async def test_backend_result_px_time(temp_db_path: Path) -> None:
     """Test result expiration using milliseconds."""
-    backend = SQLiteResultBackend(
+    backend: SQLiteResultBackend[str] = SQLiteResultBackend(
         db_path=temp_db_path,
         result_px_time=500,  # Expire after 500ms
     )
@@ -238,7 +238,7 @@ async def test_backend_result_px_time(temp_db_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_backend_cleanup_expired(temp_db_path: Path) -> None:
     """Test cleanup_expired deletes expired rows."""
-    backend = SQLiteResultBackend(
+    backend: SQLiteResultBackend[str] = SQLiteResultBackend(
         db_path=temp_db_path,
         result_ex_time=10,
     )
@@ -258,11 +258,11 @@ async def test_backend_cleanup_expired(temp_db_path: Path) -> None:
 
     now = time.time()
     await backend._connection.execute(  # type: ignore[union-attr]
-        f"UPDATE {backend.table_name} SET expires_at = ? WHERE task_id = ?",
+        f"UPDATE {backend.table_name} SET expires_at = ? WHERE task_id = ?",  # noqa: S608
         (now - 20, task_id_expired),
     )
     await backend._connection.execute(  # type: ignore[union-attr]
-        f"UPDATE {backend.table_name} SET expires_at = ? WHERE task_id = ?",
+        f"UPDATE {backend.table_name} SET expires_at = ? WHERE task_id = ?",  # noqa: S608
         (now + 20, task_id_active),
     )
     await backend._connection.commit()  # type: ignore[union-attr]
@@ -271,7 +271,7 @@ async def test_backend_cleanup_expired(temp_db_path: Path) -> None:
     assert deleted == 1
 
     async with backend._connection.execute(  # type: ignore[union-attr]
-        f"SELECT COUNT(*) FROM {backend.table_name}",
+        f"SELECT COUNT(*) FROM {backend.table_name}",  # noqa: S608
     ) as cursor:
         row = await cursor.fetchone()
         assert row is not None
